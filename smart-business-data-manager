@@ -1,0 +1,287 @@
+import pandas as pd
+import os
+
+print("""
+=========== BEFORE YOU START ===========
+
+✓ File must exist on this device.
+Example - A's file can be accessed from A's device (PC)
+
+✓ Example:
+C:\\Users\\Username\\Documents\\data.csv
+
+✓ Supported:
+CSV (.csv), Excel (.xlsx)
+
+✓ Use exact column names.
+
+✓ Save Copy is recommended.
+
+========================================
+""")
+
+dict = {}
+path = input("enter the file path: ")
+print("INPUT FORMAT-> C: \\Users\\*****\\Documents\\filename.csv")
+
+if not os.path.exists(path):
+  user_response = input("DO YOU WANT TO CREATE A NEW FILE (yes / no): ")
+  if user_response.lower() == "yes":
+    rec = int(input("enter the number of records(ex- 2,3,4 etc): "))
+    h = int(input("enter the number of coloumn headers: "))
+    for i in range(h):
+      try:
+        n = input(f"enter the {i+1} header: ")
+        dict[n] = []
+        print()
+        print(f"_____RECORDS FOR {i+1}_________")
+        for r in range(rec):
+          val = input(f"enter the {r+1} value: ")
+          dict[n].append(val)
+      except ValueError:
+        print("An invalid value was entered. Please try again.")
+    df = pd.DataFrame(dict)
+    print(df)
+    df.to_csv(path , index = False)
+    print("FILE CREATED SUCCESSFULLY IN MS EXCEL")
+  else:
+    pass
+  if os.path.exists(path):
+    data = pd.read_csv(path)
+    print(data)
+    print()
+    res = input("DO YOU WANT TO ACCESS AND CUSTOMIZE FILE (YES / NO): ")
+    try:
+      if res.lower() == "yes":
+        col = input("enter the coloumn header name: ")
+        v = input("enter the value to search (if any): ")
+        f = data[data[col] == v]
+        print(f)
+      else:
+        f = data.copy()
+    except ValueError:
+      print("An invalid value was entered.")
+    res = input("DO YOU WANT TO ACCESS DATA (YES/NO): ")
+    try:
+      if res.lower() == "yes":
+        choice = input( "choose method (BY).....\n1.ROW LABEL AND COLOUMN NAME\n2.RO AND COLOUMN INDEX " )
+        if choice == "1":
+          row = input("enter the row label: ")
+          col = input("enter the cooumn label: ")
+          print(f.loc[row , col])
+        elif choice == "2":
+          row = int(input("enter the row index: "))
+          col = int(input("enter the coloumn index: "))
+          print(f.iloc[row,col])
+        else:
+          pass
+    except ValueError:
+      print("something went wrong")
+    res = input("IS THERE ANY VALUE TO REPLACE")
+    try:
+      if res.lower() == "yes":
+        old = input("enter the old value: ")
+        new = input("enter the new value:")
+        r = input("replace in...\n1.Entire DataFrame\n2.specific coloumn")
+        if r == "1":
+          f.replace(old,new,inplace = True)
+          print(f)
+        elif r == "2":
+          col = input("enter the coloumn name:")
+          f[col].replace(old , new , inplace = True)
+          print(f)
+        else:
+          pass
+    except ValueError as e:
+      print(f"{e}")
+    res = input("WANT TO PERFORM ANY ARITHMETIC OPERATION (YES/NO): ")
+    try:
+      if res.lower() == "yes":
+        ar = input("Enter the operation type(1 or 2 or 3 or 4 or 5 or 6).....\n1. Addition\n2. Subtraction\n3. Multiplication\n4. Division\n5. Average\n6. Percentage: ")
+        col1 = input("enter the 1st (existing) header name: ")
+        col2 = input("enter the 2nd (existing) header name: ")
+        new = input("enter the new header name: ")
+        if ar == "1":
+          f[new] = f[col1] + f[col2]
+          print(f[new])
+        elif ar == "2":
+          f[new] = f[col1] - f[col2]
+          print(f[new])
+        elif ar == "3":
+          f[new] = f[col1] * f[col2]
+          print(f[new])
+        elif ar == "4":
+          f[new] = f[col1] / f[col2]
+          print(f[new])
+        elif ar == "5":
+          f[new] = (f[col1] + f[col2]) / 2
+          print(f[new])
+        elif ar == "6":
+          f[new] = (f[col1] / f[col2])* 100
+          print(f[new])
+          print()
+          print(f)
+        else:
+          pass
+    except ValueError as e:
+      print(f"{e}")
+    res = input("WANT A NEW COLOUMN ??? (YES/NO): ")
+    try:
+      if res.lower() == "yes":
+        pos = input("enter a new coloumn position: ")
+        col = input("enter the new coloumn header: ")
+        val = input("enter a default value: ")
+        f.insert(int(pos),col,val)
+        print(f)
+      else:
+        pass
+    except ValueError as e:
+      print(f"{e}")
+    res = input("TYPE YES TO DELETE A COLOUMN (YES/NO): ")
+    try:
+      if res.lower() == "yes":
+        col = input("enter the existing cooumn name: ")
+        if col:
+          f.pop(col)
+          print(f)
+      else:
+        print("coloumn not found....")
+    except ValueError as e:
+      print(f"{e}")
+    res = input("DO YOU WANT TO RENAME A COLOUMN HEADER (YES/NO): ")
+    try:
+      if res.lower() == "yes":
+        old = input("enter the old header name: ")
+        new = input("enter the new header name: ")
+        f.rename(columns = {old:new},inplace = True)
+        print(f)
+      else:
+        pass
+    except ValueError as e:
+      print(f"{e}")
+    res = input("REMOVE NULL CELL FROM YOUR FILE(IF ANY) (YES/NO): ")
+    try:
+      if res.lower() == "yes":
+        inp = input("REMOVE FROM...\n1.Entire DataFrame\n2.specific coloumn: ")
+        if inp == "1":
+          f.dropna(inplace = True)
+          print(f)
+        elif inp == "2":
+          col = input("enter the coloumn name: ")
+          f.dropna(subset = [col],inplace = True)
+          print(f)
+        else:
+          pass
+    except ValueError as e:
+      print(f"{e}")
+    res = input("DO YOU WANT TO FILL MISSING VALUES (YES/NO): ")
+    try:
+      if res.lower() == "yes":
+        col = input("enter the coloumn name: ")
+        ask = input("FILL METHOD....\n1. constant value\n2. mean\n3. median\n4. mode\n5. forward fill\n6. backward fill")
+        if ask == "1":
+          val = input("enter the constant value: ")
+          f[col].fillna(val,inplace = True)
+          print(f)
+        elif ask == "2":
+          f[col].fillna(f[col].mean(),inplace = True)
+          print(f)
+        elif ask == "3":
+          f[col].fillna(f[col].median(),inplace = True)
+          print(f)
+        elif ask == "4":
+          f[col].fillna(f[col].mode(),inplace = True)
+          print(f)
+        elif ask == "5":
+          f[col] = f[col].ffill()
+          print(f)
+        elif ask == "6":
+          f[col] = f[col].bfill()
+          print(f)
+        else:
+          pass
+    except ValueError as e:
+      print(f"{e}")
+    res = input("DO YOU WANT TO AUTIOMATICALLY FILL THE MISSING VALUES (YES/NO): ")
+    print("NOTE: This feature works only with numeric data.....")
+    try:
+      if res.lower() == "yes":
+        col = input("enter the coloumn name: ")
+        inp = input("CHOOSE THE METHOD.....\n1. linear\n2. nearest")
+        if inp == "1":
+          f[col].interpolate(method = "linear",inplace = True)
+          print(f)
+        elif inp == "2":
+          f[col].interpolate(method = "nearest",inplace = True)
+          print(f)
+        else:
+          pass
+    except ValueError as e:
+      print(f"{e}")
+    res = input("DO YOU WANT TO DROP DUPLICATE RECORDS (YES/NO): ")
+    try:
+      if res.lower() == "yes":
+        ask = input("DROP FROM...\n1.Entire DataFrame\n2.specific coloumn: ")
+        if ask == "1":
+          f.drop_duplicates(inplace = True)
+          print(f)
+        elif ask == "2":
+          col = input("enter the coloumn name: ")
+          f.drop_duplicates(subset = [col],inplace = True)
+          print(f)
+        else:
+          pass
+    except ValueError as e:
+      print(f"{e}")
+    res = input("DO YOU WANT TO RESET INDEX (YES/NO): ")
+    try:
+      if res.lower() == "yes":
+        f.reset_index(inplace = True)
+        print(f)
+      else:
+        pass
+    except ValueError as e:
+      print(f"{e}")
+    res = input("DO YOU WANT TO SAVE SUMMARY ANALYTICS (YES/NO): ")
+    try:
+      if res.lower() == "yes":
+        print("________SUMMARY__________")
+        print(f.describe())
+        print()
+        print("______BRIEF INFO_______")
+        print(f.info())
+        print(f"TOTAL ROWS: {f.index}")
+        print(f"SHAPE: {f.shape[0]}")
+        print(f"TOTAL COLOUMNS: {f.columns}")
+        print(f"SHAPE: {f.shape[1]}")
+        print(f"{f.isnull().sum()}")
+      else:
+        pass
+    except ValueError as e:
+      print(f"{e}")
+    res = input("DO YOU WAN TO SAVE THE CHANGES (YES/NO): ")
+    try:
+      if res.lower() == "yes":
+        ask = input("CHOOSE OPTIONS...\n1. update original file\n2. save as new copy\n3. preview only")
+        if ask == "1":
+          f.to_csv(path,index = False)
+          print("original file updated....")
+        elif ask == "2":
+          n = input("enter a new file name: ")
+          new_path = input("enter new path: ")
+          f.to_csv(new_path, index = False)
+          print("copy saved successfully....")
+        elif ask == "3":
+          print(f)
+          print("No changes saved.....")
+    except ValueError as e:
+      print(f"{e}")
+    print("_______VIEWING DATA WITH INDEX________")
+    f.to_string(index = True)
+    print(f)
+    print()
+    print("_______VIEWING DATA WITHOUT INDEX______")
+    f.to_string(index = False)
+    print(f)
+    print()
+    print("THANK YOU FOR USING THE SYSTEM.......")
