@@ -671,79 +671,82 @@ else:
     print("THANK YOU")
 
 choice = input("SAVE OUTPUT ?? (yes/no): ")
+
 if choice.lower() == "yes":
-    print("_____________________________________________________________________")
+
+    print("\nSelect Output Type")
+    print("1. Graph PNG")
+    print("2. Dashboard PNG")
+    print("3. Report PDF")
+    print("4. Dataset CSV")
+    print("5. Dataset Excel")
+    print("6. Export Everything")
+
+    export_choice = input("Enter choice: ")
+
     output_folder = os.path.dirname(os.path.abspath(path))
 
-    c = input("Export Graph as PNG ?? (yes/no): ")
-    if c.lower() == "yes":
-        numeric = df.select_dtypes(include="number").columns.tolist()
-        if numeric:
-            graph_path = os.path.join(output_folder, "graph_output.png")
-            plt.hist(df[numeric[0]], bins=10, color="cyan", edgecolor="red", linewidth=0.4)
-            plt.title(f"Distribution of {numeric[0]}")
-            plt.savefig(graph_path)
-            plt.close()
-            exported_files.append(graph_path)
-            total_graphs_generated += 1
-            print(f"Graph saved to {graph_path}")
-        else:
-            print("No numeric coloumn found.")
+    if export_choice == "1":
 
-    c = input("Export Dashboard as PNG ?? (yes/no): ")
-    if c.lower() == "yes":
+        graph_path = os.path.join(output_folder, "graph_output.png")
+
+        plt.savefig(graph_path)
+
+        print(f"Graph saved to:\n{graph_path}")
+
+    elif export_choice == "2":
+
         dashboard_path = os.path.join(output_folder, "dashboard_output.png")
-        numeric = df.select_dtypes(include="number").columns.tolist()
-        catagory = df.select_dtypes(include="object").columns.tolist()
-        plt.figure(figsize=(14, 10))
-        plt.subplot(2, 2, 1)
-        if numeric:
-            plt.hist(df[numeric[0]], bins=10, color="cyan")
-            plt.title(f"Distribution: {numeric[0]}")
-        plt.subplot(2, 2, 2)
-        if catagory:
-            df[catagory[0]].value_counts().plot(kind="bar", color="gold")
-            plt.title(f"Category: {catagory[0]}")
-        plt.subplot(2, 2, 3)
-        if numeric:
-            plt.plot(df.index, df[numeric[0]], color="cyan")
-            plt.title(f"Trend: {numeric[0]}")
-        plt.tight_layout()
+
         plt.savefig(dashboard_path)
-        plt.close()
-        exported_files.append(dashboard_path)
-        total_graphs_generated += 1
-        print(f"Dashboard saved to {dashboard_path}")
 
-    c = input("Export Report as PDF ?? (yes/no): ")
-    if c.lower() == "yes":
+        print(f"Dashboard saved to:\n{dashboard_path}")
+
+    elif export_choice == "3":
+
         report_path = os.path.join(output_folder, "report_output.pdf")
-        plt.figure(figsize=(8.5, 11))
-        plt.axis("off")
-        report_text = f"STATISTICAL REPORT\n\n{df.describe()}\n\nTotal graphs generated: {total_graphs_generated}\nTotal insights generated: {total_insights_generated}"
-        plt.text(0.05, 0.95, report_text, fontsize=8, va="top", family="monospace")
+
         plt.savefig(report_path)
-        plt.close()
-        exported_files.append(report_path)
-        print(f"Report saved to {report_path}")
 
-    c = input("Export Cleaned Dataset as CSV ?? (yes/no): ")
-    if c.lower() == "yes":
+        print(f"Report saved to:\n{report_path}")
+
+    elif export_choice == "4":
+
         csv_path = os.path.join(output_folder, "cleaned_dataset.csv")
+
         df.to_csv(csv_path, index=False)
-        exported_files.append(csv_path)
-        print(f"Cleaned dataset saved to {csv_path}")
 
-    c = input("Export Cleaned Dataset as Excel ?? (yes/no): ")
-    if c.lower() == "yes":
+        print(f"Dataset saved to:\n{csv_path}")
+
+    elif export_choice == "5":
+
         excel_path = os.path.join(output_folder, "cleaned_dataset.xlsx")
-        df.to_excel(excel_path, index=False)
-        exported_files.append(excel_path)
-        print(f"Cleaned dataset saved to {excel_path}")
 
-    print("Export completed successfully.")
-    print("_____________________________________________________________________")
+        df.to_excel(excel_path, index=False)
+
+        print(f"Dataset saved to:\n{excel_path}")
+
+    elif export_choice == "6":
+
+        graph_path = os.path.join(output_folder, "graph_output.png")
+        dashboard_path = os.path.join(output_folder, "dashboard_output.png")
+        csv_path = os.path.join(output_folder, "cleaned_dataset.csv")
+        excel_path = os.path.join(output_folder, "cleaned_dataset.xlsx")
+
+        plt.savefig(graph_path)
+
+        df.to_csv(csv_path, index=False)
+
+        df.to_excel(excel_path, index=False)
+
+        print("Everything exported successfully.")
+
+    else:
+
+        print("Invalid Choice")
+
 else:
+
     print("THANK YOU")
 
 print("_____________________________________________________________________")
