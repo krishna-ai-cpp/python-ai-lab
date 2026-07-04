@@ -1,0 +1,1564 @@
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+import numpy as np
+import random
+import os
+
+print("""
+INTRODUCTION:
+  This system reads your financial dataset and automatically:
+  • Analyses income, expenses, savings and transactions
+  • Detects data quality issues and health score
+  • Generates visualizations and forecasts
+  • Produces recommendations and a final report
+""")
+# ────────────────────────────────────────────────────────────
+#  SUPPORTED FILE FORMATS
+# ────────────────────────────────────────────────────────────
+print("SUPPORTED FILE FORMATS:")
+print("  • CSV  (.csv)")
+print("  • Excel (.xlsx / .xls)")
+print()
+
+Maxattempts = 3
+attempts = 0
+for attempt in range(1, Maxattempts + 1):
+    try:
+       path = input("Enter dataset file path: ").strip().strip('"').strip("'")
+    except Exception as e:
+        print(f"enter a valid file path. Error: {e}")
+    if not os.path.exists(path):
+        print(f"File not found. Please check the path and try again. Attempt {attempt} of {Maxattempts}.")
+        attempts += 1
+        if attempts < Maxattempts:
+            print(f"Attempts remaining: {Maxattempts - attempts}")
+        else:
+            print("Maximum attempts reached. Exiting the program.")
+            exit()
+    else:
+        break  
+
+try:
+    if path.endswith('.csv'):
+        df = pd.read_csv(path)
+    elif path.endswith('.xlsx') or path.endswith('.xls'):
+        df = pd.read_excel(path)
+    else:
+      print("Unsupported file format. Please provide a CSV or Excel file.")
+      exit()
+    print("Dataset loaded successfully!")
+except Exception as e:
+    print(f"Error loading dataset: {e}")
+    exit()
+if df is None or df.empty:
+    print("No valid dataset loaded. Exiting.")
+    exit()
+# ──────────────────────────────────────────────────────────
+#  DISPLAY BASIC FILE INFO
+# ──────────────────────────────────────────────────────────
+print(f"  FILE LOADED: {os.path.basename(path)}")
+print(f" 1ST 5 rows of the dataset:\n{df.head(5)}")  
+print("-----DATASET INFORMATION:----")
+print(f"Number of rows: {df.shape[0]}")
+print(f"Number of columns: {df.shape[1]}")
+print(f"Column names: {df.columns.tolist()}")
+print(f"Data types:\n{df.dtypes}")  
+print(f"INFORMATION SUMMARY:")
+df.info()  
+# ──────────────────────────────────────────────────────────
+#  CONTINUE TO ANALYSIS AND ERROR HANDLING
+# ──────────────────────────────────────────────────────────
+choice = input("Do you want to continue to analysis? (y/n): ").strip().lower()
+if choice == "yes" or choice == "y":
+    print("Continuing to analysis...")
+    if len(df) < 5:
+        print("  WARNING: Dataset has fewer than 5 rows. Results may be limited.")
+    empty_columns = df.columns[df.isnull().all()].tolist()
+    if empty_columns:
+        print(f"  WARNING: The following columns are completely empty: {empty_columns}")
+        df.drop(columns=empty_columns, inplace=True)
+        print(f"  INFO: Removed empty columns automatically.")
+    else:
+        print("  No completely empty columns detected (Action cannot be done).")
+    for col in df.columns:
+        if 'date' in col.lower() or 'time' in col.lower():
+            try:
+                df[col] = pd.to_datetime(df[col], errors='coerce')
+            except Exception:
+                pass
+    print("  Validation complete.\n")  
+else:
+    print("Exiting the program.")
+    exit()
+# ──────────────────────────────────────────────────────────
+#  GENERATE DATASET OVERVIEW
+# ──────────────────────────────────────────────────────────
+print(f"Dataset shape: {df.shape}")
+print(f"Memory usage: {df.memory_usage(deep=True).sum()} bytes")
+print(f"Missing values per column:\n{df.isnull().sum()}")
+print(f"Missing values per row:\n{df.isnull().sum(axis=1)}")
+print(f"Duplicate records: {df.duplicated().sum()}")
+# ──────────────────────────────────────────────────────────
+#  OPTIMIZE DATASET PROCESSING
+# ──────────────────────────────────────────────────────────
+large_dataset = len(df) > 5000
+high_col_count = len(df.columns) > 15
+if large_dataset:
+    print(f"\n  LARGE DATASET DETECTED ({len(df)} rows).")
+    print("  Intelligent sampling applied for visualizations (500 rows).")
+    df_sample = df.sample(500, random_state=42)
+else:
+    df_sample = df.copy()
+ 
+if high_col_count:
+    print(f"\n  HIGH COLUMN COUNT ({len(df.columns)} columns).")
+    print("  Only numeric columns used for aggregate analysis.")
+# ──────────────────────────────────────────────────────────
+#  DETECT COLUMN TYPES
+# ──────────────────────────────────────────────────────────
+numeric_columns = df.select_dtypes(include=['number']).columns.tolist()
+category_columns = df.select_dtypes(include=['object', 'category']).columns.tolist()
+datetime_columns = df.select_dtypes(include=['datetime']).columns.tolist()
+print(f"\n  NUMERIC COLUMNS: {numeric_columns}")
+print(f"  CATEGORICAL COLUMNS: {category_columns}")
+print(f"  DATETIME COLUMNS: {datetime_columns}")
+
+# Backwards-compatible names used later in the script
+numeric_cols = numeric_columns
+datetime_cols = datetime_columns
+
+print(f"\n DATASET SUMMARY:\n{df.describe(include='all')}")  
+print()
+print("  DATASET HEALTH SCORE")
+print()
+health_score = 100
+null_count  = df.isnull().sum().sum()
+dup_count   = df.duplicated().sum()
+null_pct    = null_count / (df.shape[0] * df.shape[1]) * 100
+ 
+if null_pct > 20:
+    health_score -= 30
+elif null_pct > 10:
+    health_score -= 20
+elif null_pct > 0:
+    health_score -= 10
+ 
+if dup_count > len(df) * 0.1:
+    health_score -= 20
+elif dup_count > 0:
+    health_score -= 10
+ 
+if len(df) < 10:
+    health_score -= 20
+ 
+health_score = max(0, health_score)
+print(f"  Missing Values  : {null_count} ({null_pct:.1f}%)")
+print(f"  Duplicate Rows  : {dup_count}")
+print(f"  Health Score    : {health_score}/100")
+ 
+# Quality Remarks
+if health_score >= 90:
+    remark = "Excellent — dataset is clean and ready for analysis."
+elif health_score >= 75:
+    remark = "Good — minor issues detected. Analysis will proceed."
+elif health_score >= 50:
+    remark = "Fair — some cleaning recommended before relying on results."
+else:
+    remark = "Poor — significant data quality issues. Please clean dataset."
+print(f"  Remark          : {remark}")
+# ──────────────────────────────────────────────────────────
+#  CLEANING DATASET
+# ──────────────────────────────────────────────────────────
+p = input("\nDo you want to clean the dataset? (y/n): ").strip().lower()
+if p == "yes" or p == "y":
+    df.drop_duplicates(inplace=True)  
+    for col in df.columns:
+        if df[col].isnull().sum() > 0 and df[col].dtype in ['float64', 'int64']:
+            print(f"  Cleaning column '{col}': {df[col].isnull().sum()} null values found.")
+            df[col].interpolate(method='linear', inplace=True)
+        elif df[col].isnull().sum() > 0 and df[col].dtype not in ['float64', 'int64']: 
+            print(f"  Cleaning column '{col}': {df[col].isnull().sum()} null values found.")
+            df[col].fillna(df[col].mode()[0], inplace=True)
+        else:
+            print(f"  Column '{col}' has no null values.")
+    for col in df.columns:
+        if df[col].dtype == object: 
+            df[col] = df[col].astype(str).str.strip().str.lower()
+            df[col] = df[col].str.replace('[^a-zA-Z0-9 ]', '', regex=True)
+            df[col] = df[col].str.capitalize()
+            df[col] = df[col].str.replace(r'\s+', ' ', regex=True)
+    print("Cleaning completed......")  
+    new_null = df.isnull().sum().sum()
+    new_dup  = df.duplicated().sum()
+    print(f"  Updated Missing Values : {new_null}")
+    print(f"  Updated Duplicates     : {new_dup}")
+# ──────────────────────────────────────────────────────────
+# DISPLAY QUALITY WARNINGS
+# ──────────────────────────────────────────────────────────
+warnings = []
+dup = df.duplicated().sum()
+missing = df.isnull().sum().sum()
+currmissing = df.isnull().sum().sum() / (df.shape[0] * df.shape[1]) * 100
+if dup > 0:
+    warnings.append(f"  WARNING: {dup} duplicate rows detected.")
+if currmissing > 0:
+    warnings.append(f"  WARNING: {currmissing:.1f}% null values found in dataset.") 
+    if df[col].dtype == object:  
+        if not df[col].str.isalpha().all():
+            warnings.append(f"  WARNING: Non-alphabetic characters found in categorical column '{col}'.")
+    if df[col].dtype in ['float64', 'int64'] and (df[col] < 0).any():
+        warnings.append(f"  WARNING: Negative values found in numeric column '{col}'.")
+for col in datetime_cols:
+    nat_count = df[col].isnull().sum()
+    if nat_count > 0:
+        warnings.append(f"  ⚠  Invalid dates in '{col}': {nat_count} records")
+ 
+# Suspicious zero records in financial columns
+for col in numeric_cols:
+    zero_pct = (df[col] == 0).sum() / len(df) * 100
+    if zero_pct > 50:
+        warnings.append(f"  ⚠  Column '{col}' is {zero_pct:.0f}% zeros — suspicious")
+if warnings:
+    for w in warnings:
+        print(w)
+else:
+    print("  No data quality warnings detected.")
+# ──────────────────────────────────────────────────────────
+# DETECT FINANCIAL COLUMNS
+# ──────────────────────────────────────────────────────────
+expense_columns     = [col for col in numeric_cols if 'exp' in col.lower() or 'cost' in col.lower() or 'spend' in col.lower()]
+income_columns      = [col for col in numeric_cols if 'income' in col.lower() or 'revenue' in col.lower() or 'earn' in col.lower()]
+savings_columns     = [col for col in numeric_cols if 'save' in col.lower() or 'savings' in col.lower() or 'deposit' in col.lower()]
+category_columns    = [col for col in category_columns if 'category' in col.lower() or 'type' in col.lower() or 'class' in col.lower()]
+transaction_columns = [col for col in category_columns if 'transaction' in col.lower() or 'txn' in col.lower()]
+amount_columns      = [col for col in numeric_cols if 'amount' in col.lower() or 'amt' in col.lower() or 'value' in col.lower() or 'price' in col.lower()
+                       or 'rs' in col.lower() or '₹' in col.lower() or '$' in col.lower() or '€' in col.lower() or '£' in col.lower()
+                       or 'usd' in col.lower() or 'eur' in col.lower() or 'gbp' in col.lower()]
+date_columns        = [col for col in datetime_cols if 'date' in col.lower() or 'time' in col.lower() or 'timestamp' in col.lower()]
+payment_columns     = [col for col in category_columns if 'payment' in col.lower() or 'mode' in col.lower() or 'method' in col.lower()]
+merchant_columns    = [col for col in category_columns if 'merchant' in col.lower() or 'vendor' in col.lower() or 'store' in col.lower()]
+print(f"  Expense Cols     : {expense_columns}")
+print(f"  Income Cols      : {income_columns}")
+print(f"  Savings Cols     : {savings_columns}")
+print(f"  Category Cols    : {category_columns}")
+print(f"  Transaction Cols : {transaction_columns}")
+print(f"  Amount Cols      : {amount_columns}")
+print(f"  Date Cols        : {date_columns}")
+print(f"  Payment Cols     : {payment_columns}")
+print(f"  Merchant Cols    : {merchant_columns}")
+if not amount_columns:
+    amount_columns = numeric_cols[:1] if numeric_cols else []
+if not income_columns:
+    income_columns = numeric_cols[:1] if len(numeric_cols) >= 1 else []
+if not expense_columns:
+    expense_columns = numeric_cols[1:2] if len(numeric_cols) >= 2 else numeric_cols[:1]
+# ────────────────────────────────────────────────────────────
+#   FINANCIAL DATA PROFILE
+# ────────────────────────────────────────────────────────────
+print()
+print("  FINANCIAL DATA PROFILE")
+print()
+ 
+profile = {
+    'rows'          : len(df),
+    'numeric_cols'  : numeric_cols,
+    'category_cols' : category_columns,
+    'datetime_cols' : datetime_cols,
+    'income_cols'   : income_columns,
+    'expense_cols'  : expense_columns,
+    'savings_cols'  : savings_columns,
+    'amount_cols'   : amount_columns,
+    'date_cols'     : date_columns,
+    'has_dates'     : len(datetime_cols) > 0 or len(date_columns) > 0,
+    'has_categories': len(category_columns) > 0
+}
+ 
+for k, v in profile.items():
+    print(f"  {k:<20}: {v}")
+# ────────────────────────────────────────────────────────────
+#   FINANCIAL OVERVIEW
+# ────────────────────────────────────────────────────────────
+print("  FINANCIAL OVERVIEW")
+def tsum(col):
+    valid = [c for c in col if c in df.columns]
+    if not valid:
+        return 0
+    return df[valid].select_dtypes(include='number').sum().sum()
+def tmean(col):
+    valid = [c for c in col if c in df.columns]
+    if not valid:
+        return 0
+    return df[valid].select_dtypes(include='number').mean().mean()
+def tmax(col):
+    valid = [c for c in col if c in df.columns]
+    if not valid:
+        return 0
+    return df[valid].select_dtypes(include='number').max().max()
+def tmin(col):
+    valid = [c for c in col if c in df.columns]
+    if not valid:
+        return 0
+    return df[valid].select_dtypes(include='number').min().min()
+total_income  = tsum(income_columns)
+total_expense = tsum(expense_columns)
+total_savings = tsum(savings_columns)
+net_balance   = total_income - total_expense
+avg_expense   = tmean(expense_columns)
+avg_income    = tmean(income_columns)
+max_expense   = tmax(expense_columns)
+min_expense   = tmin(expense_columns)
+expense_ratio = (total_expense / total_income * 100) if total_income > 0 else 0
+ 
+print(f"  Total Income          : {total_income:,.2f}")
+print(f"  Total Expenses        : {total_expense:,.2f}")
+print(f"  Total Savings         : {total_savings:,.2f}")
+print(f"  Net Balance           : {net_balance:,.2f}")
+print(f"  Average Expense       : {avg_expense:,.2f}")
+print(f"  Average Income        : {avg_income:,.2f}")
+print(f"  Largest Expense       : {max_expense:,.2f}")
+print(f"  Smallest Expense      : {min_expense:,.2f}")
+print(f"  Expense/Income Ratio  : {expense_ratio:.1f}%")
+# ────────────────────────────────────────────────────────────
+#  FINANCIAL COMPARISON ANALYSIS
+# ────────────────────────────────────────────────────────────
+if income_columns and expense_columns and savings_columns:
+    ic = income_columns[0]
+    ec = expense_columns[0]
+    sc = savings_columns[0]
+    if ic in df.columns and ec in df.columns:
+        corr_ie = df[ic].corr(df[ec])  
+        print(f"income vs expenses relationship -->  {corr_ie:.2f}")
+    if ic in df.columns and sc in df.columns:
+        corr_is = df[ic].corr(df[sc])
+        print(f"income vs savings relationship -->  {corr_is:.2f}")
+# ────────────────────────────────────────────────────────────
+#  QUICK FINANCIAL SNAPSHOT
+# ────────────────────────────────────────────────────────────
+print()
+print("  QUICK FINANCIAL SNAPSHOT")
+print()
+ 
+savings_rate   = (total_savings / total_income * 100) if total_income > 0 else 0
+fin_health_raw = 100 - expense_ratio + savings_rate
+fin_health     = max(0, min(100, fin_health_raw))
+ 
+print(f"  Total Income       : {total_income:,.2f}")
+print(f"  Total Expenses     : {total_expense:,.2f}")
+print(f"  Total Savings      : {total_savings:,.2f}")
+print(f"  Net Balance        : {net_balance:,.2f}")
+print(f"  Financial Health   : {fin_health:.1f}/100")
+ 
+# ────────────────────────────────────────────────────────────
+#  INCOME DEPENDENCY ANALYSIS
+# ────────────────────────────────────────────────────────────
+print()
+print("  INCOME DEPENDENCY ANALYSIS")
+print()
+if income_columns and expense_columns:
+    ic = income_columns[0]
+    ec = expense_columns[0]
+    if ic in df.columns and df[ic].sum() > 0:
+        print(f"  Top Income Source  : {ic} → {df[ic].sum():,.2f}")
+        print(f"  Top Expense Source : {ec} → {df[ec].sum():,.2f}")
+        income_conc = df[ic].sum() / total_income * 100 if total_income > 0 else 0
+        print(f"  Income Concentration Risk : {income_conc:.1f}%")
+        if income_conc > 80:
+            print("  ⚠  High concentration risk — income heavily from one source.")
+    else:
+        print("  Income column found but values are zero or unavailable.")
+else:
+    print("  Income/expense columns not detected — skipping.")
+# ────────────────────────────────────────────────────────────
+#  CATEGORY ANALYSIS
+# ────────────────────────────────────────────────────────────
+if category_columns and amount_columns:
+    cat  = df.groupby(category_columns[0])[amount_columns[0]].sum().sort_values(ascending=False)
+    print(f"Category totals:\n{cat}")
+    cpt = (cat / cat.sum()) * 100
+    print(f"Category percentage:\n{cpt}")
+    for rank, (category, value) in enumerate(cat.items(), start=1):
+        print(f"  Rank {rank}: {category} → {value:,.2f} ({cpt[category]:.1f}%)")
+    print(f"Highest spending category: {cat.index[0]}")
+    print(f"Lowest spending category: {cat.index[-1]}")
+    print(f"""For highest spending category '{cat.index[0]}':
+      • Total spent: {cat.iloc[0]:,.2f}
+      • Percentage of total expenses: {cpt.iloc[0]:.1f}%
+      • Consider reviewing expenses in this category for potential savings.
+""")
+    print(f"""For lowest spending category '{cat.index[-1]}':
+      • Total spent: {cat.iloc[-1]:,.2f}
+      • Percentage of total expenses: {cpt.iloc[-1]:.1f}%
+      • This category has minimal impact on overall expenses.
+""")
+    if cpt.iloc[0] > 35:  
+        print(f"⚠  High concentration in category '{cat.index[0]}' — consider diversifying expenses.")
+    for i in range(len(cat) - 1):  
+        if cpt.iloc[i] == cpt.iloc[i + 1]:
+            print(f"""Your spending is well distributed across all categories.
+                  No single category exceeds 35% of total expenses.""")
+    if len(cat) >= 3:
+        print(f""" Top 3 categories:
+            1. {cat.head(3).index[0]}
+            2. {cat.head(3).index[1]}
+            3. {cat.head(3).index[2]}
+        Together contribute to {cpt.head(3).sum():.1f}% of total expenses.""")
+    print(f"You spent money across {len(cat)} different categories.")
+    print(f"Average spending per category is ₹{cat.mean():,.2f}")
+    print(f"Most of your money is concentrated in only {len(cat[cat > cat.mean()])} categories.")
+    if 'Food' in cat.index:  
+        print(f"Reducing food expenses by just 10% could save you ₹{cat['Food'] * 0.1:,.2f} per month.")
+    else:
+        top_cat = cat.index[0]
+        print(f"Reducing '{top_cat}' expenses by just 10% could save you ₹{cat.iloc[0] * 0.1:,.2f} per month.")
+else:
+    print("  Category or Amount columns not detected — skipping category analysis.")
+# ────────────────────────────────────────────────────────────
+#  TIME TREND ANALYSIS
+# ────────────────────────────────────────────────────────────
+if date_columns and amount_columns:
+    dc = date_columns[0]
+    ac = amount_columns[0]
+    print(f"Daily trends:\n{df.groupby(dc)[ac].sum()}")
+    print(f"Weekly trends:\n{df.groupby(df[dc].dt.to_period('W'))[ac].sum()}")
+    print(f"Monthly trends:\n{df.groupby(df[dc].dt.to_period('M'))[ac].sum()}")
+    print(f"Yearly trends:\n{df.groupby(df[dc].dt.to_period('Y'))[ac].sum()}")
+    monthly_trend = df.groupby(df[dc].dt.to_period('M'))[ac].sum()
+    print(f"Growth trends:\n{monthly_trend.pct_change().fillna(0) * 100}")
+    print(f"Declining trends:\n{monthly_trend.pct_change().fillna(0) * -100}") 
+else:
+    print("  Date or Amount columns not detected — skipping time trend analysis.")
+# ────────────────────────────────────────────────────────────
+#  CORRELATION ANALYSIS
+# ────────────────────────────────────────────────────────────
+numeric_df = df.select_dtypes(include="number")
+corr = numeric_df.corr()
+
+def analyze(name, r):
+    if r > 0.7:
+        print(f"{name}: Strong Positive Relationship")
+    elif r > 0.3:
+        print(f"{name}: Moderate Positive Relationship")
+    elif r > -0.3:
+        print(f"{name}: Weak Relationship")
+    elif r > -0.7:
+        print(f"{name}: Moderate Negative Relationship")
+    else:
+        print(f"{name}: Strong Negative Relationship")
+if income_columns and expense_columns and savings_columns:
+    ic = income_columns[0]
+    ec = expense_columns[0]
+    sc = savings_columns[0]
+    if ic in corr.columns and ec in corr.columns:
+        analyze("Income vs Expense", corr.loc[ic, ec])
+    if ic in corr.columns and sc in corr.columns:
+        analyze("Income vs Savings", corr.loc[ic, sc])
+    if ec in corr.columns and sc in corr.columns:
+        analyze("Expense vs Savings", corr.loc[ec, sc])
+else:
+    print("  Not enough financial columns for correlation analysis.")
+# ────────────────────────────────────────────────────────────
+#  CORRELATION VISUALIZATION
+# ────────────────────────────────────────────────────────────
+cmap_options = ['coolwarm', 'viridis', 'plasma', 'magma', 'Blues', 'Greens', 'Reds', 'YlOrRd']
+chosen_cmap  = random.choice(cmap_options)  
+sns.set(style="darkgrid")
+t = input("Enter the title of the correlation: ")
+sns.heatmap(corr, annot=True, cmap=chosen_cmap, fmt=".2f", linewidths=0.5)  
+plt.title(t)
+plt.tight_layout()
+plt.show()
+# ────────────────────────────────────────────────────────────
+#  SPENDING BEHAVIOUR ANALYSIS
+# ────────────────────────────────────────────────────────────
+message = []
+li = "low"
+if amount_columns and amount_columns[0] in df.columns:
+    ac = amount_columns[0]
+    f1 = df[ac].value_counts()  
+    message.append(f"Most frequent transaction: ₹{f1.idxmax()} ({f1.max()} times)")
+if category_columns and category_columns[0] in df.columns:
+    cc = category_columns[0]
+    f2 = df[cc].value_counts()  
+    rare = f2[f2 < 2]
+    if not rare.empty:  
+        message.append(f"Rare Transactions:\n{rare}")
+if amount_columns and amount_columns[0] in df.columns:
+    ac = amount_columns[0]
+    avg = df[ac].mean()
+    f3 = df[df[ac] > avg * 3]
+    message.append(f"Unusual Transactions Found:\n{f3}")
+if date_columns and date_columns[0] in df.columns and amount_columns and amount_columns[0] in df.columns:
+    dc = date_columns[0]
+    ac = amount_columns[0]
+    monthly = df.groupby(df[dc].dt.to_period('M'))[ac].sum()  
+    message.append(f"Highest spending was in {monthly.idxmax()} : ₹{monthly.max()}")
+if income_columns and expense_columns:
+    ic = income_columns[0]
+    ec = expense_columns[0]
+    if ic in df.columns and ec in df.columns:
+        income_growth  = df[ic].pct_change().mean() * 100   
+        expense_growth = df[ec].pct_change().mean() * 100
+        if expense_growth > income_growth + 5:
+            message.append("Lifestyle Inflation: High")
+            li = "High"
+        elif expense_growth > income_growth:
+            message.append("Lifestyle Inflation: Moderate")
+            li = "Moderate"
+        else:
+            message.append("Lifestyle Inflation: Low")
+            li = "low"
+for m in message:
+    print(m)
+# ────────────────────────────────────────────────────────────
+#  SPENDING DISTRIBUTION ANALYSIS
+# ────────────────────────────────────────────────────────────
+if expense_columns and expense_columns[0] in df.columns:
+    ec = expense_columns[0]
+    skew = df[ec].skew()   
+    if skew > 0.5:
+        print("Right skewed distribution")
+    elif skew < -0.5:
+        print("Left skewed distribution")
+    else:
+        print("Approximately Normal Distribution")
+    chosen_cmap2 = random.choice(cmap_options)  
+    sns.set(style="darkgrid")
+    sns.kdeplot(df[ec])  
+    plt.title("Spending Density")
+    plt.tight_layout()
+    plt.show()
+    print("Spending Density Graph generated successfully")
+    print()
+    std  = df[ec].std()
+    mean = df[ec].mean()
+    cv   = (std / mean) * 100 if mean != 0 else 0  
+    if cv < 20:
+        print("Low spending variability")
+    elif cv < 50:
+        print("Moderate spending variability")
+    else:
+        print("High spending variability")
+    print()
+    if abs(skew) <= 0.5:
+        print("Symmetric distribution")
+    else:
+        print("Asymmetric distribution")
+else:
+    print("  Expense column not detected — skipping spending distribution analysis.")
+# ────────────────────────────────────────────────────────────
+#  FINANCIAL INTELLIGENCE SCORES
+# ────────────────────────────────────────────────────────────
+score = 0
+savings_rate_pct = 0  
+if income_columns and savings_columns:
+    ic = income_columns[0]
+    sc = savings_columns[0]
+    if ic in df.columns and sc in df.columns and df[ic].sum() > 0:
+        savings_rate_pct = (df[sc].sum() / df[ic].sum()) * 100
+        if savings_rate_pct > 30:       
+            score += 100                
+        elif savings_rate_pct > 20:
+            score += 80
+        elif savings_rate_pct > 10:
+            score += 60
+        elif savings_rate_pct > 5:
+            score += 40
+        else:
+            score += 20
+        print(f"Savings Rate Score: {score}/100 (Savings Rate: {savings_rate_pct:.1f}%)")
+if expense_columns and expense_columns[0] in df.columns:
+    ec = expense_columns[0]
+    exp_std  = df[ec].std()
+    exp_mean = df[ec].mean()
+    cv = (exp_std / exp_mean) * 100 if exp_mean != 0 else 0
+    if cv <= 3:
+        print("Stable expense")
+    elif cv <= 30:
+        print("Expenses fluctuate moderately")
+    elif cv <= 90:
+        print("Spending is highly unpredictable")
+    else:
+        print("Variation is even larger than its average")
+    print()
+else:
+    cv = 0  
+
+pts = 0
+icv = 0  
+Is = "low"
+if income_columns and income_columns[0] in df.columns:
+    ic = income_columns[0]
+    inc_std  = df[ic].std()
+    inc_mean = df[ic].mean()
+    icv = (inc_std / inc_mean) * 100 if inc_mean != 0 else 0
+    if icv <= 3:
+        print("Stable income")
+        Is = "High"
+    elif icv <= 30:
+        print("Income fluctuates moderately")
+        Is = "Moderate"
+    elif icv <= 90:
+        print("Income is highly unpredictable")
+        Is = "Low"
+    else:
+        print("Variation is even larger than its average")
+        Is = "critical"
+
+emergency_mts = 0  
+if savings_columns and expense_columns:                     
+    sc = savings_columns[0]
+    ec = expense_columns[0]
+    if sc in df.columns and ec in df.columns and df[ec].mean() != 0:
+        emergency_mts = df[sc].sum() / df[ec].mean()        
+    if emergency_mts > 6:
+        print("A person can survive more than 6 months : excellent")
+    elif emergency_mts > 3:
+        print("A person can survive only 3-6 months : Good")
+    elif emergency_mts > 1:
+        print("A person can survive only 1-3 months : Weak")
+    else:
+        print("A person can survive less than 1 month : Critical")
+
+if savings_rate_pct and emergency_mts and icv and cv:
+    wgh = (savings_rate_pct + emergency_mts + icv + cv) / 4
+    print(f"Your Financial health score is {wgh:.2f}")     
+
+if savings_columns and income_columns:
+    sc = savings_columns[0]
+    ic = income_columns[0]
+    if sc in df.columns and df[sc].mean() != 0:
+        cv_sav = (df[sc].std() / df[ic].sum()) * 100 if df[ic].sum() != 0 else 0  
+        if cv_sav <= 3:
+            print("Very consistent")
+        elif cv_sav <= 30:
+            print("Consistency fluctuates moderately")
+        elif cv_sav <= 90:
+            print("Consistency is highly unpredictable")
+        else:
+            print("Consistency is even larger than its average")
+
+if income_columns and expense_columns:
+    ic = income_columns[0]
+    ec = expense_columns[0]
+    if ic in df.columns and ec in df.columns:
+        corr_ie = abs(df[ic].corr(df[ec]))                 
+        if savings_rate_pct and emergency_mts > 6 and cv <= 3 and corr_ie > 0:
+            print("High Independence")
+        else:
+            print("Low Independence")
+
+print()
+print("___________FINANCIAL PERSONA_______________")
+if income_columns and expense_columns:
+    ic = income_columns[0]
+    ec = expense_columns[0]
+    if ic in df.columns and ec in df.columns and df[ic].sum() != 0:
+        er = (df[ec].sum() / df[ic].sum()) * 100
+        if savings_rate_pct > 30 and er < 60:
+            print("You are a conservative saver")
+        elif 20 < savings_rate_pct <= 30 and 50 < er <= 70:
+            print("No major Risks")
+
+investment_columns = [col for col in numeric_columns if 'investment' in col.lower()]  
+if investment_columns and income_columns:
+    ic = income_columns[0]
+    if ic in df.columns and df[ic].sum() != 0:
+        inv_pct = (df[investment_columns].sum().sum() / df[ic].sum()) * 100  
+        if inv_pct > 20:
+            print("Savings Good\nPositive net worth")
+        else:
+            print("Cannot be determined")
+
+if income_columns and expense_columns:
+    ic = income_columns[0]
+    ec = expense_columns[0]
+    if ic in df.columns and ec in df.columns:
+        income_growth  = df[ic].pct_change().mean() * 100
+        expense_growth = df[ec].pct_change().mean() * 100
+        if df[ec].sum() > df[ic].sum() or savings_rate_pct < 20 or expense_growth > income_growth + 5:  
+            print("High Risk Spender")
+
+if savings_rate_pct > 20 and emergency_mts > 6 and icv <= 3 and cv <= 3:
+    print("Financially Disciplined")
+# ────────────────────────────────────────────────────────────
+#  RECOMMENDATION AND CONFIDENCE
+# ────────────────────────────────────────────────────────────
+risks = []
+suggestions = []
+if expense_columns and income_columns:
+    ec = df[expense_columns[0]]   
+    ic = df[income_columns[0]]    
+    if ic.sum() > ec.sum():      
+        risks.append("Overspending Risk \n")
+if savings_rate_pct > 0 and savings_rate_pct < 10:
+    risks.append("Low Savings Risk \n")
+if emergency_mts < 3:
+    risks.append("Emergency Risk \n")
+if 'expense_growth' in dir() and 'income_growth' in dir():   
+    if expense_growth > income_growth + 5:                    
+        risks.append("Lifestyle Inflation Risk \n")
+if icv > 30:                     
+    risks.append("Income Instability Risk \n")
+if cv > 90:                       
+    risks.append("Irregular Spending Risk \n")
+for r in risks:
+    print(f"Risks:\n{r}")
+print()
+if savings_rate_pct > 0 and savings_rate_pct < 35:    
+    suggestions.append("Increase monthly savings to at least 20%\n")
+elif savings_rate_pct >= 35:                          
+    suggestions.append("Maintain your strong savings pace!\n")
+for s in suggestions:              
+    print(f"Suggestion: {s}")
+print()
+# ────────────────────────────────────────────────────────────
+#  SMART VISUALIZATION
+# ────────────────────────────────────────────────────────────
+print("\n========== SMART VISUALIZATION RECOMMENDATIONS ==========\n")
+
+recommendations = []
+
+numeric  = len(numeric_columns)
+category = len(category_columns)
+date     = len(datetime_columns)
+colour   = random.choice(cmap_options)
+
+# ── Date + Numeric ───────────────────────────────────────────
+if date >= 1 and numeric >= 1:
+    recommendations.append(("Trend Analysis", "Line Chart"))
+    recommendations.append(("Trend Analysis", "lineplot()"))
+    if date_columns and amount_columns:
+        dc = date_columns[0]
+        nc = amount_columns[0]
+        trend = df.groupby(dc)[nc].sum()          
+        plt.figure()
+        plt.plot(trend.index.astype(str), trend.values,
+                 color='steelblue',               
+                 alpha=0.8, lw=2)                 
+        plt.xlabel("Date")
+        plt.ylabel("Numeric")
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        plt.show()
+
+# ── Category + Numeric ───────────────────────────────────────
+if category >= 1 and numeric >= 1:
+    recommendations.append(("Category Comparison", "Bar Chart"))
+    recommendations.append(("Category Comparison", "barplot()"))
+    if category_columns and amount_columns:
+        cc = category_columns[0]
+        nc = amount_columns[0]
+        sns.set(style="darkgrid")
+        plt.figure()
+        sns.barplot(x=df[cc], y=df[nc],           
+                    palette=colour, alpha=0.8)     
+        plt.tight_layout()
+        plt.show()
+
+# ── Numeric Only ─────────────────────────────────────────────
+if numeric >= 1:
+    recommendations.append(("Distribution", "Histogram"))
+    recommendations.append(("Distribution", "histplot()"))
+    if amount_columns:
+        nc = amount_columns[0]
+        plt.figure()
+        plt.hist(df[nc], color='steelblue',       
+                 bins=10, alpha=0.8)               
+        plt.xlabel("Numeric")
+        plt.tight_layout()
+        plt.show()
+
+# ── Two Numeric Columns ──────────────────────────────────────
+if numeric >= 2:
+    recommendations.append(("Relationship",          "Scatter Plot"))
+    recommendations.append(("Relationship",          "scatterplot()"))
+    recommendations.append(("Regression",            "regplot()"))
+    recommendations.append(("Correlation",           "heatmap()"))
+    recommendations.append(("Pairwise Relationships","pairplot()"))
+
+    n1 = numeric_columns[0]
+    n2 = numeric_columns[1]
+
+    # ── Scatter Plot ─────────────────────────────────────────
+    plt.figure()
+    sns.set(style="darkgrid")
+    sns.scatterplot(x=df[n1], y=df[n2], color="steelblue", alpha=0.7)
+    plt.title(f"Scatter Plot: {n1} vs {n2}")
+    plt.xlabel(n1)
+    plt.ylabel(n2)
+    plt.tight_layout()
+    plt.show()
+
+    # ── Regression Plot ──────────────────────────────────────
+    plt.figure()
+    sns.regplot(x=df[n1], y=df[n2], color="tomato",
+                scatter_kws={"alpha": 0.5}, line_kws={"lw": 2})
+    plt.title(f"Regression Plot: {n1} vs {n2}")
+    plt.xlabel(n1)
+    plt.ylabel(n2)
+    plt.tight_layout()
+    plt.show()
+
+    # ── Correlation Heatmap ──────────────────────────────────
+    plt.figure()
+    numeric_df = df[numeric_columns].select_dtypes(include="number")
+    corr = numeric_df.corr()
+    sns.heatmap(corr, annot=True, cmap=colour, fmt=".2f", linewidths=0.5)
+    plt.title("Correlation Heatmap")
+    plt.tight_layout()
+    plt.show()
+
+    # ── Pairplot ─────────────────────────────────────────────
+    pair_cols = numeric_columns[:3] if len(numeric_columns) >= 3 else numeric_columns
+    sns.pairplot(df[pair_cols].dropna(), diag_kind="kde", plot_kws={"alpha": 0.5})
+    plt.suptitle("Pairwise Relationships", y=1.02)
+    plt.tight_layout()
+    plt.show()
+
+# ── Three Numeric Columns ─────────────────────────────────────
+if numeric >= 3:
+    recommendations.append(("3-Variable Relationship", "Bubble Chart"))
+    recommendations.append(("3-Variable Distribution", "3-Axis KDE Plot"))
+
+    n1 = numeric_columns[0]
+    n2 = numeric_columns[1]
+    n3 = numeric_columns[2]
+
+    # ── Bubble Chart (3 numeric: x, y, size) ─────────────────
+    plt.figure()
+    sizes = (df[n3] - df[n3].min()) / (df[n3].max() - df[n3].min() + 1e-9) * 500 + 20
+    plt.scatter(df[n1], df[n2], s=sizes, alpha=0.6,
+                color="mediumpurple", edgecolors="white", linewidths=0.5)
+    plt.title(f"Bubble Chart: {n1} vs {n2} (size = {n3})")
+    plt.xlabel(n1)
+    plt.ylabel(n2)
+    plt.tight_layout()
+    plt.show()
+
+    # ── KDE Plot for all 3 numeric columns ───────────────────
+    plt.figure()
+    sns.set(style="darkgrid")
+    for col in [n1, n2, n3]:
+        sns.kdeplot(df[col].dropna(), label=col, fill=True, alpha=0.3)
+    plt.title("Spending Density — 3 Numeric Columns")
+    plt.xlabel("Value")
+    plt.ylabel("Density")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+# ── Category Only ────────────────────────────────────────────
+if category >= 1:
+    recommendations.append(("Category Frequency", "countplot()"))
+    cc = category_columns[0]
+
+    # ── Count Plot ────────────────────────────────────────────
+    plt.figure()
+    sns.set(style="darkgrid")
+    order = df[cc].value_counts().index
+    sns.countplot(x=df[cc], order=order, palette=colour, alpha=0.85)
+    plt.title(f"Category Frequency: {cc}")
+    plt.xlabel(cc)
+    plt.ylabel("Count")
+    plt.xticks(rotation=45, ha="right")
+    plt.tight_layout()
+    plt.show()
+
+    # ── Pie Chart of category frequencies ────────────────────
+    plt.figure()
+    counts = df[cc].value_counts()
+    plt.pie(counts.values,
+            labels=counts.index,
+            autopct="%1.1f%%",
+            startangle=90,
+            colors=sns.color_palette(colour, len(counts)))
+    plt.title(f"Category Distribution: {cc}")
+    plt.axis("equal")
+    plt.tight_layout()
+    plt.show()
+
+    # ── Horizontal Bar of category frequencies ───────────────
+    plt.figure()
+    counts.sort_values().plot(kind="barh", color="steelblue", alpha=0.8)
+    plt.title(f"Category Counts (Horizontal): {cc}")
+    plt.xlabel("Count")
+    plt.ylabel(cc)
+    plt.tight_layout()
+    plt.show()
+
+# ── Print Recommendations ─────────────────────────────────────
+print("Recommended Visualizations\n")
+for purpose, graph in recommendations:
+    print(f"  {purpose:<35} {graph:<20}")
+# ────────────────────────────────────────────────────────────
+#  GENERATE EXECUTIVE SUMMARY
+# ────────────────────────────────────────────────────────────
+print("\n" + "=" * 60)
+print("          EXECUTIVE SUMMARY")
+print("=" * 60)
+
+key_findings   = []
+top_risks      = []
+top_opportunities = []
+
+# ── Key Findings ─────────────────────────────────────────────
+key_findings.append(f"Total Income   : {total_income:,.2f}")
+key_findings.append(f"Total Expenses : {total_expense:,.2f}")
+key_findings.append(f"Total Savings  : {total_savings:,.2f}")
+key_findings.append(f"Net Balance    : {net_balance:,.2f}")
+key_findings.append(f"Savings Rate   : {savings_rate_pct:.1f}%")
+key_findings.append(f"Expense Ratio  : {expense_ratio:.1f}%")
+key_findings.append(f"Financial Health Score : {fin_health:.1f}/100")
+if category_columns and amount_columns:
+    key_findings.append(f"Highest Spending Category : {cat.index[0]} ({cpt.iloc[0]:.1f}%)")
+if date_columns and amount_columns:
+    dc = date_columns[0]
+    ac = amount_columns[0]
+    monthly_totals = df.groupby(df[dc].dt.to_period('M'))[ac].sum()
+    key_findings.append(f"Highest Spending Month : {monthly_totals.idxmax()} ({monthly_totals.max():,.2f})")
+
+# ── Top Risks ─────────────────────────────────────────────────
+if expense_ratio > 80:
+    top_risks.append("Critical: Expense ratio exceeds 80% of income.")
+if savings_rate_pct < 10:
+    top_risks.append("Low savings rate — below 10% of income.")
+if emergency_mts < 3:
+    top_risks.append("Emergency fund covers less than 3 months.")
+if icv > 30:
+    top_risks.append("Income is unstable — high variability detected.")
+if cv > 90:
+    top_risks.append("Irregular spending — high expense variability.")
+if net_balance < 0:
+    top_risks.append("Negative net balance — expenses exceed income.")
+if not top_risks:
+    top_risks.append("No critical risks detected.")
+
+# ── Top Opportunities ─────────────────────────────────────────
+if savings_rate_pct < 20:
+    top_opportunities.append("Increase savings rate to at least 20% of income.")
+if expense_ratio > 60:
+    top_opportunities.append("Reduce discretionary expenses to improve net balance.")
+if emergency_mts < 6:
+    top_opportunities.append("Build emergency fund to cover at least 6 months.")
+if category_columns and amount_columns:
+    top_opportunities.append(f"Review top spending category '{cat.index[0]}' for savings potential.")
+if len(numeric_columns) >= 2:
+    top_opportunities.append("Diversify income sources to reduce concentration risk.")
+if not top_opportunities:
+    top_opportunities.append("Finances are well managed. Continue current habits.")
+
+# ── Display Executive Summary ─────────────────────────────────
+print("\n  KEY FINDINGS")
+print("  " + "-" * 40)
+for f in key_findings:
+    print(f"  • {f}")
+
+print("\n  TOP RISKS")
+print("  " + "-" * 40)
+for r in top_risks:
+    print(f"  ⚠  {r}")
+
+print("\n  TOP OPPORTUNITIES")
+print("  " + "-" * 40)
+for o in top_opportunities:
+    print(f"  ✓  {o}")
+print("\n" + "=" * 60)
+
+# ────────────────────────────────────────────────────────────
+#  GENERATE FINANCIAL DASHBOARD
+# ────────────────────────────────────────────────────────────
+print("\nGenerating Financial Dashboard...")
+
+graphs_generated = 0
+
+fig_mpl, axes = plt.subplots(2, 2, figsize=(16, 10))
+fig_mpl.suptitle("Financial Dashboard — Matplotlib", fontsize=16, fontweight='bold')
+
+# ── Revenue Trend ─────────────────────────────────────────────
+ax = axes[0, 0]
+if date_columns and income_columns:
+    dc = date_columns[0]
+    ic = income_columns[0]
+    trend = df.groupby(df[dc].dt.to_period('M'))[ic].sum()
+    ax.plot(trend.index.astype(str), trend.values, color='green', lw=2, marker='o', markersize=4)
+    ax.set_title("Revenue Trend")
+    ax.set_xlabel("Month")
+    ax.set_ylabel("Income")
+    ax.tick_params(axis='x', rotation=45)
+    ax.grid(True, alpha=0.3)
+else:
+    ax.text(0.5, 0.5, "No date/income data", ha='center', va='center', transform=ax.transAxes)
+    ax.set_title("Revenue Trend")
+
+# ── Expense Trend ─────────────────────────────────────────────
+ax = axes[0, 1]
+if date_columns and expense_columns:
+    dc = date_columns[0]
+    ec = expense_columns[0]
+    trend = df.groupby(df[dc].dt.to_period('M'))[ec].sum()
+    ax.plot(trend.index.astype(str), trend.values, color='red', lw=2, marker='o', markersize=4)
+    ax.set_title("Expense Trend")
+    ax.set_xlabel("Month")
+    ax.set_ylabel("Expense")
+    ax.tick_params(axis='x', rotation=45)
+    ax.grid(True, alpha=0.3)
+else:
+    ax.text(0.5, 0.5, "No date/expense data", ha='center', va='center', transform=ax.transAxes)
+    ax.set_title("Expense Trend")
+
+# ── Savings Trend ─────────────────────────────────────────────
+ax = axes[1, 0]
+if date_columns and savings_columns:
+    dc = date_columns[0]
+    sc = savings_columns[0]
+    trend = df.groupby(df[dc].dt.to_period('M'))[sc].sum()
+    ax.plot(trend.index.astype(str), trend.values, color='steelblue', lw=2, marker='s', markersize=4)
+    ax.set_title("Savings Trend")
+    ax.set_xlabel("Month")
+    ax.set_ylabel("Savings")
+    ax.tick_params(axis='x', rotation=45)
+    ax.grid(True, alpha=0.3)
+else:
+    ax.text(0.5, 0.5, "No date/savings data", ha='center', va='center', transform=ax.transAxes)
+    ax.set_title("Savings Trend")
+
+# ── Category Breakdown ────────────────────────────────────────
+ax = axes[1, 1]
+if category_columns and amount_columns:
+    cat_data = df.groupby(category_columns[0])[amount_columns[0]].sum().sort_values(ascending=False).head(8)
+    ax.bar(cat_data.index, cat_data.values, color='mediumpurple', alpha=0.85, edgecolor='white')
+    ax.set_title("Category Breakdown")
+    ax.set_xlabel("Category")
+    ax.set_ylabel("Amount")
+    ax.tick_params(axis='x', rotation=45)
+    ax.grid(True, alpha=0.3, axis='y')
+else:
+    ax.text(0.5, 0.5, "No category data", ha='center', va='center', transform=ax.transAxes)
+    ax.set_title("Category Breakdown")
+
+plt.tight_layout()
+plt.savefig("dashboard_matplotlib.png", dpi=150, bbox_inches='tight')
+graphs_generated += 1
+plt.show()
+print("  Matplotlib Dashboard generated.")
+
+# ── Seaborn Dashboard ─────────────────────────────────────────
+fig_sns, axes2 = plt.subplots(3, 3, figsize=(18, 14))
+fig_sns.suptitle("Financial Dashboard — Seaborn", fontsize=16, fontweight='bold')
+sns.set(style="darkgrid")
+
+# Correlation Heatmap
+ax = axes2[0, 0]
+numeric_df = df.select_dtypes(include='number')
+if not numeric_df.empty:
+    sns.heatmap(numeric_df.corr(), annot=True, cmap='coolwarm', fmt='.2f',
+                linewidths=0.5, ax=ax, cbar=True)
+    ax.set_title("Correlation Heatmap")
+else:
+    ax.text(0.5, 0.5, "No numeric data", ha='center', va='center', transform=ax.transAxes)
+
+# Expense Distribution
+ax = axes2[0, 1]
+if expense_columns and expense_columns[0] in df.columns:
+    sns.histplot(df[expense_columns[0]].dropna(), bins=20, kde=True,
+                 color='tomato', alpha=0.7, ax=ax)
+    ax.set_title("Expense Distribution")
+    ax.set_xlabel(expense_columns[0])
+else:
+    ax.text(0.5, 0.5, "No expense data", ha='center', va='center', transform=ax.transAxes)
+
+# Income Distribution
+ax = axes2[0, 2]
+if income_columns and income_columns[0] in df.columns:
+    sns.histplot(df[income_columns[0]].dropna(), bins=20, kde=True,
+                 color='green', alpha=0.7, ax=ax)
+    ax.set_title("Income Distribution")
+    ax.set_xlabel(income_columns[0])
+else:
+    ax.text(0.5, 0.5, "No income data", ha='center', va='center', transform=ax.transAxes)
+
+# Regression Plot
+ax = axes2[1, 0]
+if income_columns and expense_columns:
+    ic = income_columns[0]
+    ec = expense_columns[0]
+    if ic in df.columns and ec in df.columns:
+        sns.regplot(x=df[ic], y=df[ec], ax=ax, color='steelblue',
+                    scatter_kws={'alpha': 0.5}, line_kws={'lw': 2, 'color': 'red'})
+        ax.set_title("Regression: Income vs Expense")
+    else:
+        ax.text(0.5, 0.5, "No data", ha='center', va='center', transform=ax.transAxes)
+else:
+    ax.text(0.5, 0.5, "No income/expense data", ha='center', va='center', transform=ax.transAxes)
+    ax.set_title("Regression Plot")
+
+# Spending Behaviour Plot (boxplot per category)
+ax = axes2[1, 1]
+if category_columns and amount_columns:
+    cc = category_columns[0]
+    ac = amount_columns[0]
+    top_cats = df[cc].value_counts().head(6).index
+    plot_df  = df[df[cc].isin(top_cats)]
+    sns.boxplot(x=plot_df[cc], y=plot_df[ac], ax=ax, palette='Set2')
+    ax.set_title("Spending Behaviour by Category")
+    ax.set_xlabel(cc)
+    ax.set_ylabel(ac)
+    ax.tick_params(axis='x', rotation=30)
+else:
+    ax.text(0.5, 0.5, "No category/amount data", ha='center', va='center', transform=ax.transAxes)
+    ax.set_title("Spending Behaviour")
+
+# KDE — Income vs Expense overlay
+ax = axes2[1, 2]
+if income_columns and income_columns[0] in df.columns:
+    sns.kdeplot(df[income_columns[0]].dropna(), label='Income',  fill=True, alpha=0.4, color='green', ax=ax)
+if expense_columns and expense_columns[0] in df.columns:
+    sns.kdeplot(df[expense_columns[0]].dropna(), label='Expense', fill=True, alpha=0.4, color='red',   ax=ax)
+ax.set_title("Income vs Expense Density")
+ax.legend()
+
+# Savings Distribution
+ax = axes2[2, 0]
+if savings_columns and savings_columns[0] in df.columns:
+    sns.histplot(df[savings_columns[0]].dropna(), bins=20, kde=True,
+                 color='steelblue', alpha=0.7, ax=ax)
+    ax.set_title("Savings Distribution")
+else:
+    ax.text(0.5, 0.5, "No savings data", ha='center', va='center', transform=ax.transAxes)
+    ax.set_title("Savings Distribution")
+
+# Monthly Spending Bar
+ax = axes2[2, 1]
+if date_columns and amount_columns:
+    dc = date_columns[0]
+    ac = amount_columns[0]
+    monthly = df.groupby(df[dc].dt.to_period('M'))[ac].sum()
+    ax.bar(monthly.index.astype(str), monthly.values, color='mediumpurple', alpha=0.85)
+    ax.set_title("Monthly Spending")
+    ax.set_xlabel("Month")
+    ax.set_ylabel("Amount")
+    ax.tick_params(axis='x', rotation=45)
+else:
+    ax.text(0.5, 0.5, "No date/amount data", ha='center', va='center', transform=ax.transAxes)
+    ax.set_title("Monthly Spending")
+
+# Pairplot placeholder (shown separately — pairplot creates its own figure)
+axes2[2, 2].axis('off')
+axes2[2, 2].text(0.5, 0.5, "See Pairplot\n(separate window)", ha='center', va='center',
+                 fontsize=11, transform=axes2[2, 2].transAxes)
+
+plt.tight_layout()
+plt.savefig("dashboard_seaborn.png", dpi=150, bbox_inches='tight')
+graphs_generated += 1
+plt.show()
+print("  Seaborn Dashboard generated.")
+
+# ────────────────────────────────────────────────────────────
+#  SET FINANCIAL GOAL
+# ────────────────────────────────────────────────────────────
+print("\n" + "=" * 60)
+goal_choice = input("Do you want to SET A FINANCIAL GOAL? (y/n): ").strip().lower()
+
+if goal_choice in ('y', 'yes'):
+
+    # ── Enter Target Savings ──────────────────────────────────
+    try:
+        target_savings = float(input("  Enter Target Savings Amount (₹): ").strip())
+    except ValueError:
+        print("  Invalid amount. Defaulting to 0.")
+        target_savings = 0.0
+
+    # ── Enter Target Date ─────────────────────────────────────
+    try:
+        target_date_str = input("  Enter Target Date (YYYY-MM-DD): ").strip()
+        target_date     = pd.to_datetime(target_date_str)
+        today           = pd.Timestamp.today().normalize()
+        months_left     = max(1, (target_date.year - today.year) * 12 + (target_date.month - today.month))
+    except Exception:
+        print("  Invalid date. Defaulting to 12 months.")
+        months_left  = 12
+        target_date  = pd.Timestamp.today() + pd.DateOffset(months=12)
+
+    # ── Calculate Monthly Requirement ────────────────────────
+    current_savings    = total_savings
+    remaining_savings  = max(0, target_savings - current_savings)
+    monthly_required   = remaining_savings / months_left
+    print(f"\n  Target Savings     : ₹{target_savings:,.2f}")
+    print(f"  Current Savings    : ₹{current_savings:,.2f}")
+    print(f"  Remaining          : ₹{remaining_savings:,.2f}")
+    print(f"  Months Left        : {months_left}")
+    print(f"  Monthly Requirement: ₹{monthly_required:,.2f}")
+
+    # ── Track Goal Progress ───────────────────────────────────
+    progress_pct = (current_savings / target_savings * 100) if target_savings > 0 else 0
+    bar_filled   = int(progress_pct / 5)
+    bar_empty    = 20 - bar_filled
+    print(f"\n  Goal Progress      : {progress_pct:.1f}%")
+    print(f"  [{'█' * bar_filled}{'░' * bar_empty}]")
+
+    # ── Estimate Goal Achievement Date ───────────────────────
+    monthly_savings_avg = total_savings / max(1, len(df)) if savings_columns else monthly_required
+    if monthly_savings_avg > 0:
+        months_to_goal = remaining_savings / monthly_savings_avg
+        estimated_date = pd.Timestamp.today() + pd.DateOffset(months=int(months_to_goal))
+        print(f"  Estimated Achievement Date : {estimated_date.strftime('%B %Y')}")
+    else:
+        print("  Estimated Achievement Date : Cannot determine (savings avg is 0).")
+
+    # ── Generate Goal Recommendations ────────────────────────
+    print("\n  GOAL RECOMMENDATIONS")
+    print("  " + "-" * 40)
+    if monthly_required > monthly_savings_avg:
+        shortfall = monthly_required - monthly_savings_avg
+        print(f"  ⚠  You need ₹{shortfall:,.2f} more per month to meet your goal on time.")
+        print("  ✓  Consider reducing discretionary expenses.")
+        print("  ✓  Look for additional income sources.")
+    else:
+        print("  ✓  Your current savings rate is on track to meet the goal.")
+    if progress_pct >= 75:
+        print("  ✓  You are more than 75% of the way to your goal — keep going!")
+    elif progress_pct >= 50:
+        print("  ✓  Halfway there — maintain your current pace.")
+    else:
+        print("  ✓  Early stage — consistency is key.")
+
+else:
+    print("  Skipping goal setting.")
+
+# ────────────────────────────────────────────────────────────
+#  GENERATE FINANCIAL FORECAST
+# ────────────────────────────────────────────────────────────
+print("\n" + "=" * 60)
+print("          FINANCIAL FORECAST")
+print("=" * 60)
+
+forecast_results = {}
+
+if amount_columns and date_columns:
+    dc = date_columns[0]
+    ac = amount_columns[0]
+
+    # ── Prepare Forecast Dataset ──────────────────────────────
+    monthly_series = df.groupby(df[dc].dt.to_period('M'))[ac].sum().sort_index()
+    forecast_values = monthly_series.values.astype(float)
+    n = len(forecast_values)
+    print(f"  Historical months available : {n}")
+
+    # ── Detect Historical Patterns ────────────────────────────
+    if n >= 2:
+        avg_monthly   = np.mean(forecast_values)
+        trend_slope   = np.polyfit(np.arange(n), forecast_values, 1)[0]
+        growth_rate   = np.mean(np.diff(forecast_values) / (forecast_values[:-1] + 1e-9)) * 100
+        std_dev       = np.std(forecast_values)
+        print(f"  Average Monthly Spending   : ₹{avg_monthly:,.2f}")
+        print(f"  Monthly Trend Slope        : ₹{trend_slope:,.2f}")
+        print(f"  Avg Monthly Growth Rate    : {growth_rate:.2f}%")
+        print(f"  Std Deviation              : ₹{std_dev:,.2f}")
+
+        # ── Apply NumPy Forecast Model (linear extrapolation) ──
+        x_hist     = np.arange(n)
+        coeffs     = np.polyfit(x_hist, forecast_values, 1)
+        poly_model = np.poly1d(coeffs)
+
+        def forecast_month(m):
+            return float(poly_model(n + m - 1))
+
+        # ── Predict 1 / 3 / 6 / 12 Months ────────────────────
+        pred_1m  = forecast_month(1)
+        pred_3m  = sum(forecast_month(i) for i in range(1, 4))
+        pred_6m  = sum(forecast_month(i) for i in range(1, 7))
+        pred_12m = sum(forecast_month(i) for i in range(1, 13))
+
+        forecast_results = {
+            '1  Month' : pred_1m,
+            '3  Months': pred_3m,
+            '6  Months': pred_6m,
+            '12 Months': pred_12m,
+        }
+
+        print("\n  FORECAST RESULTS")
+        print("  " + "-" * 40)
+        for period, value in forecast_results.items():
+            print(f"  Predicted Spending ({period}) : ₹{value:,.2f}")
+
+        # ── Calculate Forecast Confidence ─────────────────────
+        cv_conf = (std_dev / avg_monthly * 100) if avg_monthly != 0 else 100
+        if cv_conf < 20:
+            confidence = "High"
+        elif cv_conf < 50:
+            confidence = "Moderate"
+        else:
+            confidence = "Low"
+        print(f"\n  Forecast Confidence : {confidence} (CV = {cv_conf:.1f}%)")
+
+        # ── Generate Forecast Graph ────────────────────────────
+        future_x      = np.arange(n, n + 12)
+        future_vals   = [forecast_month(i) for i in range(1, 13)]
+        last_date     = monthly_series.index[-1]
+        future_labels = [(last_date + i).strftime('%b %Y') for i in range(1, 13)]
+
+        plt.figure(figsize=(12, 5))
+        plt.plot(range(n), forecast_values, color='steelblue', lw=2,
+                 marker='o', markersize=4, label='Historical')
+        plt.plot(range(n - 1, n + 12), [forecast_values[-1]] + future_vals,
+                 color='tomato', lw=2, linestyle='--', marker='s',
+                 markersize=4, label='Forecast')
+        plt.axvline(x=n - 1, color='gray', linestyle=':', lw=1.5, label='Forecast Start')
+        all_labels = [str(p) for p in monthly_series.index] + future_labels
+        plt.xticks(range(n + 12), all_labels, rotation=45, ha='right', fontsize=8)
+        plt.title("Financial Forecast — Next 12 Months")
+        plt.xlabel("Month")
+        plt.ylabel("Amount (₹)")
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig("forecast_graph.png", dpi=150, bbox_inches='tight')
+        graphs_generated += 1
+        plt.show()
+        print("  Forecast graph generated.")
+    else:
+        print("  Not enough historical data for forecasting (need at least 2 months).")
+else:
+    print("  Date or amount columns not detected — skipping forecast.")
+
+# ────────────────────────────────────────────────────────────
+#  ASK YOUR FINANCES (NL QUERY)
+# ────────────────────────────────────────────────────────────
+print("\n" + "=" * 60)
+print("          ASK YOUR FINANCES")
+print("=" * 60)
+print("  Examples:")
+print("    • Show Top 5 Expenses")
+print("    • Show Food Spending")
+print("    • Show Savings Trend")
+print("    • Show Highest Expense Month")
+print("    • Show Lowest Income Month")
+print("    • Compare Income and Expenses")
+print("    • Show Spending by Category")
+print()
+
+insights_generated = 0
+query = input("  Enter your query (or 'skip' to continue): ").strip().lower()
+
+if query != 'skip' and query != '':
+
+    # ── Match Query Pattern & Execute Pandas Logic ────────────
+    if 'top 5 expense' in query or 'top expenses' in query:
+        if amount_columns and amount_columns[0] in df.columns:
+            result = df.nlargest(5, amount_columns[0])[[amount_columns[0]]]
+            print("\n  Top 5 Expenses:")
+            print(result.to_string())
+            insights_generated += 1
+
+    elif any(cat_kw in query for cat_kw in df[category_columns[0]].str.lower().tolist()) if category_columns else False:
+        matched_cat = next((w for w in df[category_columns[0]].str.lower().unique() if w in query), None)
+        if matched_cat and amount_columns:
+            mask   = df[category_columns[0]].str.lower() == matched_cat
+            result = df[mask][amount_columns[0]].sum()
+            print(f"\n  Total spending on '{matched_cat}' : ₹{result:,.2f}")
+            insights_generated += 1
+
+    elif 'savings trend' in query:
+        if savings_columns and date_columns:
+            trend = df.groupby(df[date_columns[0]].dt.to_period('M'))[savings_columns[0]].sum()
+            print("\n  Savings Trend:")
+            print(trend.to_string())
+            insights_generated += 1
+
+    elif 'highest expense month' in query:
+        if date_columns and expense_columns:
+            monthly = df.groupby(df[date_columns[0]].dt.to_period('M'))[expense_columns[0]].sum()
+            print(f"\n  Highest Expense Month : {monthly.idxmax()} — ₹{monthly.max():,.2f}")
+            insights_generated += 1
+
+    elif 'lowest income month' in query:
+        if date_columns and income_columns:
+            monthly = df.groupby(df[date_columns[0]].dt.to_period('M'))[income_columns[0]].sum()
+            print(f"\n  Lowest Income Month : {monthly.idxmin()} — ₹{monthly.min():,.2f}")
+            insights_generated += 1
+
+    elif 'compare income' in query or 'compare income and expense' in query:
+        print(f"\n  Total Income   : ₹{total_income:,.2f}")
+        print(f"  Total Expenses : ₹{total_expense:,.2f}")
+        print(f"  Net Balance    : ₹{net_balance:,.2f}")
+        print(f"  Expense Ratio  : {expense_ratio:.1f}%")
+        insights_generated += 1
+
+    elif 'spending by category' in query or 'category' in query:
+        if category_columns and amount_columns:
+            cat_summary = df.groupby(category_columns[0])[amount_columns[0]].sum().sort_values(ascending=False)
+            print("\n  Spending by Category:")
+            print(cat_summary.to_string())
+            insights_generated += 1
+
+    else:
+        print("  Query not recognised. Try one of the examples shown above.")
+
+# ────────────────────────────────────────────────────────────
+#  GENERATE FINAL REPORT
+# ────────────────────────────────────────────────────────────
+print("\n" + "=" * 60)
+print("          FINAL REPORT")
+print("=" * 60)
+
+report_lines = []
+recommendations_generated = 0
+
+# ── Statistical Report ────────────────────────────────────────
+report_lines.append("=" * 60)
+report_lines.append("  STATISTICAL REPORT")
+report_lines.append("=" * 60)
+report_lines.append(f"  Rows              : {len(df)}")
+report_lines.append(f"  Columns           : {len(df.columns)}")
+report_lines.append(f"  Numeric Columns   : {numeric_columns}")
+report_lines.append(f"  Category Columns  : {category_columns}")
+report_lines.append(f"  Datetime Columns  : {datetime_columns}")
+report_lines.append(f"  Missing Values    : {df.isnull().sum().sum()}")
+report_lines.append(f"  Duplicate Rows    : {df.duplicated().sum()}")
+report_lines.append(f"  Health Score      : {health_score}/100")
+
+# ── Category Report ───────────────────────────────────────────
+report_lines.append("\n" + "=" * 60)
+report_lines.append("  CATEGORY REPORT")
+report_lines.append("=" * 60)
+if category_columns and amount_columns:
+    cat_rep = df.groupby(category_columns[0])[amount_columns[0]].sum().sort_values(ascending=False)
+    for cat_name, cat_val in cat_rep.items():
+        report_lines.append(f"  {cat_name:<25} : ₹{cat_val:,.2f}")
+
+# ── Trend Report ──────────────────────────────────────────────
+report_lines.append("\n" + "=" * 60)
+report_lines.append("  TREND REPORT")
+report_lines.append("=" * 60)
+if date_columns and amount_columns:
+    dc = date_columns[0]
+    ac = amount_columns[0]
+    mt = df.groupby(df[dc].dt.to_period('M'))[ac].sum()
+    for period, val in mt.items():
+        report_lines.append(f"  {str(period):<12} : ₹{val:,.2f}")
+
+# ── Financial Health Report ───────────────────────────────────
+report_lines.append("\n" + "=" * 60)
+report_lines.append("  FINANCIAL HEALTH REPORT")
+report_lines.append("=" * 60)
+report_lines.append(f"  Total Income          : ₹{total_income:,.2f}")
+report_lines.append(f"  Total Expenses        : ₹{total_expense:,.2f}")
+report_lines.append(f"  Total Savings         : ₹{total_savings:,.2f}")
+report_lines.append(f"  Net Balance           : ₹{net_balance:,.2f}")
+report_lines.append(f"  Savings Rate          : {savings_rate_pct:.1f}%")
+report_lines.append(f"  Expense Ratio         : {expense_ratio:.1f}%")
+report_lines.append(f"  Emergency Fund Months : {emergency_mts:.1f}")
+report_lines.append(f"  Financial Health Score: {fin_health:.1f}/100")
+
+# ── Recommendation Report ─────────────────────────────────────
+report_lines.append("\n" + "=" * 60)
+report_lines.append("  RECOMMENDATION REPORT")
+report_lines.append("=" * 60)
+for rec in suggestions:
+    report_lines.append(f"  ✓  {rec.strip()}")
+    recommendations_generated += 1
+for risk in top_risks:
+    report_lines.append(f"  ⚠  {risk.strip()}")
+
+# ── Forecast Report ───────────────────────────────────────────
+report_lines.append("\n" + "=" * 60)
+report_lines.append("  FORECAST REPORT")
+report_lines.append("=" * 60)
+if forecast_results:
+    for period, value in forecast_results.items():
+        report_lines.append(f"  Predicted ({period}) : ₹{value:,.2f}")
+else:
+    report_lines.append("  Forecast not available.")
+
+for line in report_lines:
+    print(line)
+
+# ────────────────────────────────────────────────────────────
+#  EXPORT OUTPUTS
+# ────────────────────────────────────────────────────────────
+print("\n" + "=" * 60)
+print("          EXPORTING OUTPUTS")
+print("=" * 60)
+
+export_details = []
+
+try:
+    # ── Export Graphs as PNG (already saved above during generation) ──
+    print("  ✓  dashboard_matplotlib.png — saved.")
+    print("  ✓  dashboard_seaborn.png    — saved.")
+    if forecast_results:
+        print("  ✓  forecast_graph.png       — saved.")
+    export_details.append("Matplotlib Dashboard  → dashboard_matplotlib.png")
+    export_details.append("Seaborn Dashboard     → dashboard_seaborn.png")
+    if forecast_results:
+        export_details.append("Forecast Graph        → forecast_graph.png")
+except Exception as e:
+    print(f"  Graph export error: {e}")
+
+try:
+    # ── Export Report as Text (PDF requires extra lib; .txt keeps zero dependencies) ──
+    report_path = "financial_report.txt"
+    with open(report_path, 'w', encoding='utf-8') as rf:
+        rf.write('\n'.join(report_lines))
+    print(f"  ✓  Financial report exported → {report_path}")
+    export_details.append(f"Financial Report      → {report_path}")
+except Exception as e:
+    print(f"  Report export error: {e}")
+
+try:
+    # ── Export Forecast Report ────────────────────────────────
+    if forecast_results:
+        forecast_path = "forecast_report.txt"
+        with open(forecast_path, 'w', encoding='utf-8') as ff:
+            ff.write("FINANCIAL FORECAST REPORT\n")
+            ff.write("=" * 40 + "\n")
+            for period, value in forecast_results.items():
+                ff.write(f"Predicted ({period}) : {value:,.2f}\n")
+        print(f"  ✓  Forecast report exported → {forecast_path}")
+        export_details.append(f"Forecast Report       → {forecast_path}")
+except Exception as e:
+    print(f"  Forecast export error: {e}")
+
+try:
+    # ── Export Cleaned Dataset as CSV ─────────────────────────
+    csv_path = "cleaned_dataset.csv"
+    df.to_csv(csv_path, index=False)
+    print(f"  ✓  Cleaned dataset exported → {csv_path}")
+    export_details.append(f"Cleaned CSV           → {csv_path}")
+except Exception as e:
+    print(f"  CSV export error: {e}")
+
+try:
+    # ── Export Cleaned Dataset as Excel ───────────────────────
+    excel_path = "cleaned_dataset.xlsx"
+    df.to_excel(excel_path, index=False)
+    print(f"  ✓  Cleaned dataset exported → {excel_path}")
+    export_details.append(f"Cleaned Excel         → {excel_path}")
+except Exception as e:
+    print(f"  Excel export error: {e}")
+
+# ────────────────────────────────────────────────────────────
+#  SESSION SUMMARY
+# ────────────────────────────────────────────────────────────
+print("\n" + "=" * 60)
+print("          SESSION SUMMARY")
+print("=" * 60)
+print(f"  Total Expenses Analysed       : ₹{total_expense:,.2f}")
+print(f"  Total Insights Generated      : {insights_generated}")
+print(f"  Total Recommendations         : {recommendations_generated}")
+print(f"  Total Graphs Generated        : {graphs_generated}")
+print()
+print("  EXPORT DETAILS:")
+for detail in export_details:
+    print(f"    • {detail}")
+
+# ────────────────────────────────────────────────────────────
+#  THANK USER & END
+# ────────────────────────────────────────────────────────────
+print()
+print("=" * 60)
+print("  Thank you for using the Smart Financial Data Analysis")
+print("  System! We hope the insights help you make better")
+print("  financial decisions. Happy saving! 💰")
+print("=" * 60)
