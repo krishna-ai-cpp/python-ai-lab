@@ -1,0 +1,99 @@
+import pandas as pd
+from google.colab import files
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+import tensorflow
+from sklearn.metrics import accuracy_score
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.models import Sequential
+
+uploaded = files.upload()
+
+# Get the filename from the uploaded dictionary
+file_name = next(iter(uploaded))
+
+df = pd.read_csv(file_name)
+print("Original DataFrame head:")
+print(df.head(6))
+
+# --- Data Cleaning: Apply to the entire DataFrame first ---
+# Handle missing values
+if df.isnull().sum().sum() > 0:
+  print("\nDropping rows with NaN values...")
+  df.dropna(inplace=True)
+
+# Handle duplicate rows
+if df.duplicated().sum() > 0:
+  print("Dropping duplicate rows...")
+  df.drop_duplicates(inplace=True)
+
+# --- Now, extract features (x) and target (y) from the cleaned DataFrame ---
+x = df.iloc[:,:-1]
+y = df.iloc[:,-1]
+
+# --- Convert target variable y to numerical (0 or 1) ---
+# Assuming '>50K' or '>50K.' maps to 1, and '<=50K' or '<=50K.' maps to 0
+# It's important to do this before train_test_split
+print("\nConverting target variable 'y' to numerical (0/1)...")
+if y.dtype == 'object':
+    y = y.apply(lambda val: 1 if '>50K' in str(val) else 0)
+    print("Target variable 'y' converted to numerical.")
+else:
+    print("Target variable 'y' is already numerical.")
+
+# --- Imputation for x ---
+numeric_cols_x = x.select_dtypes(include=['number']).columns
+categorical_cols_x = x.select_dtypes(include=['object', 'category']).columns
+
+if not numeric_cols_x.empty:
+    si_median = SimpleImputer(strategy="median")
+    x[numeric_cols_x] = si_median.fit_transform(x[numeric_cols_x])
+    print("\nImputed numerical features in x using median strategy.")
+
+if not categorical_cols_x.empty:
+    si_most_frequent = SimpleImputer(strategy="most_frequent")
+    x[categorical_cols_x] = si_most_frequent.fit_transform(x[categorical_cols_x])
+    print("Imputed categorical features in x using most frequent strategy.")
+
+# --- One-hot encoding for categorical features in x ---
+x = pd.get_dummies(x, drop_first=True)
+print("\nDataFrame x after one-hot encoding:")
+print(x.head(6))
+
+# Capture column names after one-hot encoding, before scaling converts to numpy array
+x_columns_after_encoding = x.columns
+
+# --- Scaling numerical features in x ---
+sc = StandardScaler()
+x = sc.fit_transform(x)
+print("\nFeatures in x after StandardScaler (now a NumPy array):")
+print(x[:6]) # Show first 6 rows of the scaled NumPy array
+x = pd.DataFrame(x, columns = x_columns_after_encoding)
+
+# --- Train-test split ---
+x_train,x_test,y_train,y_test = train_test_split(x,y,test_size = 0.2, random_state = 42)
+print("\nData split into training and testing sets.")
+print("x_train shape: ", x_train.shape)
+print("x_test shape: ", x_test.shape)
+print("y_train: ", y_train.shape)
+print("y_test: ", y_test.shape)
+
+nn = Sequential()
+nn.add(Dense(12, input_dim = x.shape[1], activation = "relu"))
+nn.add(Dense(9, activation = "relu"))
+nn.add(Dense(7, activation = "relu"))
+nn.add(Dense(5, activation = "relu"))
+nn.add(Dense(3, activation= "relu"))
+nn.add(Dense(1, activation = "sigmoid")) # Changed output layer to 1 neuron for binary classification
+
+nn.compile(optimizer = "adam", loss = "binary_crossentropy", metrics= ['accuracy'])
+nn.fit(x_train,y_train,batch_size=100,epochs = 100)
+
+pred = nn.predict(x_test)
+
+# The prediction 'pred' will be probabilities, so thresholding is needed
+pred_binary = (pred > 0.5).astype(int)
+
+# y_test should already be numerical (0 or 1) due to preprocessing on 'y'
+print(accuracy_score(pred_binary, y_test))
