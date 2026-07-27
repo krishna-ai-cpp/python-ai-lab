@@ -1,0 +1,147 @@
+import pandas as pd
+from google.colab import files
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.model_selection import train_test_split
+import tensorflow
+from sklearn.cluster import KMeans
+from sklearn.linear_model import LogisticRegression, LinearRegression
+from sklearn.metrics import accuracy_score, r2_score, mean_absolute_error
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.models import Sequential
+import numpy as np
+
+# Upload dataset
+uploaded = files.upload()
+file_name = next(iter(uploaded))
+df = pd.read_csv(file_name)
+
+# Explore dataset
+print(df.head(6))
+print(f"Rows: {df.shape[0]}, Columns: {df.shape[1]}")
+
+# Drop duplicates
+if df.duplicated().sum() > 0:
+    df.drop_duplicates(inplace=True)
+
+# Split features and target
+x = df.iloc[:, :-1]
+y = df.iloc[:, -1]
+
+# Encode target if categorical
+if y.dtype == 'object':
+    le = LabelEncoder()
+    y = pd.Series(le.fit_transform(y), name=y.name)
+
+# Handle missing values
+nc = x.select_dtypes(include=['object']).columns.to_list()
+cc = x.select_dtypes(include=['object', 'category']).columns.to_list()
+
+if nc and x[nc].isnull().sum().sum() > 0:
+    imputer = SimpleImputer(strategy='most_frequent')
+    x[nc] = pd.DataFrame(imputer.fit_transform(x[nc]), columns=nc)
+
+if cc and x[cc].isnull().sum().sum() > 0:
+    imputer = SimpleImputer(strategy='most_frequent')
+    x[cc] = pd.DataFrame(imputer.fit_transform(x[cc]), columns=cc)
+
+# One-hot encode categorical features
+x = pd.get_dummies(x, columns=cc)
+
+# Outlier detection and removal
+numerical_x = x.select_dtypes(include=np.number)
+q1, q3 = numerical_x.quantile(0.25), numerical_x.quantile(0.75)
+iqr = q3 - q1
+lower, upper = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+mask = ((numerical_x < lower) | (numerical_x > upper)).any(axis=1)
+
+if mask.sum() > 0:
+    print("Outliers removed")
+    x, y = x[~mask], y[~mask]
+else:
+    print("No outliers found")
+
+print(x.head(6))
+
+# Scale features
+sc = StandardScaler()
+x = pd.DataFrame(sc.fit_transform(x), columns=x.columns)
+
+# Train-test split
+x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
+print(f"Train shapes: {x_train.shape}, {y_train.shape}")
+print(f"Test shapes: {x_test.shape}, {y_test.shape}")
+
+# Model selection
+model = None
+if pd.api.types.is_numeric_dtype(y) and y.nunique() > 10:
+    model = "regression"
+elif y.nunique() == 2:
+    model = "binary"
+elif y.nunique() > 2:
+    model = "multiclass"
+elif y.empty or y.isnull().all():
+    model = "clustering"
+
+# Train models
+if model == "regression":
+    if y.shape[0] <= 50:
+        m = LinearRegression()
+        m.fit(x_train, y_train)
+        pred = m.predict(x_test)
+        print("LinearRegression R2:", r2_score(y_test, pred))
+        print("MAE:", mean_absolute_error(y_test, pred))
+    else:
+        nn = Sequential([
+            Dense(32, input_dim=x_train.shape[1], activation="relu"),
+            Dense(16, activation="relu"),
+            Dense(1, activation="linear")
+        ])
+        nn.compile(optimizer="adam", loss="mse")
+        nn.fit(x_train, y_train, epochs=50, batch_size=16, verbose=0)
+        pred = nn.predict(x_test)
+        print("NN Regression R2:", r2_score(y_test, pred))
+        print("MAE:", mean_absolute_error(y_test, pred))
+
+elif model == "binary":
+    if y.shape[0] <= 50:
+        m = LogisticRegression(max_iter=1000)
+        m.fit(x_train, y_train)
+        pred = m.predict(x_test)
+        print("LogisticRegression Accuracy:", accuracy_score(y_test, pred))
+    else:
+        nn = Sequential([
+            Dense(32, input_dim=x_train.shape[1], activation="relu"),
+            Dense(16, activation="relu"),
+            Dense(1, activation="sigmoid")
+        ])
+        nn.compile(optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"])
+        nn.fit(x_train, y_train, epochs=50, batch_size=16, verbose=0)
+        pred = (nn.predict(x_test) > 0.5).astype(int)
+        print("NN Binary Accuracy:", accuracy_score(y_test, pred))
+
+elif model == "multiclass":
+    num_classes = y.nunique()
+    nn = Sequential([
+        Dense(32, input_dim=x_train.shape[1], activation="relu"),
+        Dense(16, activation="relu"),
+        Dense(num_classes, activation="softmax")
+    ])
+    nn.compile(optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"])
+    nn.fit(x_train, y_train, epochs=50, batch_size=16, verbose=0)
+    pred = nn.predict(x_test).argmax(axis=1)
+    print("NN Multiclass Accuracy:", accuracy_score(y_test, pred))
+    print(f"Prediction: {pred}")
+
+elif model == "clustering":
+    inertia = []
+    for k in range(1, 11):
+        m = KMeans(n_clusters=k, random_state=42, n_init=10)
+        m.fit(x_train)
+        inertia.append(m.inertia_)
+    best_k = inertia.index(min(inertia)) + 1
+    print("Best k for KMeans:", best_k)
+    m = KMeans(n_clusters=best_k, random_state=42, n_init=10)
+    m.fit(x_train)
+    pred = m.predict(x_test)
+    print("KMeans prediction sample:", pred[:5])
