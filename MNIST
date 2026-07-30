@@ -1,0 +1,61 @@
+import tensorflow as tf
+import numpy as np
+import matplotlib.pyplot as plt
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, BatchNormalization, Dropout
+from tensorflow.keras.datasets import mnist
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.callbacks import EarlyStopping
+
+# Load MNIST
+(x_train, y_train), (x_test, y_test) = mnist.load_data()
+
+# Reshape to add channel dimension
+x_train = x_train.reshape(-1, 28, 28, 1).astype("float32") / 255.0
+x_test = x_test.reshape(-1, 28, 28, 1).astype("float32") / 255.0
+
+print("x_train:", x_train.shape)
+print("x_test:", x_test.shape)
+print("y_train:", y_train.shape)
+print("y_test:", y_test.shape)
+
+# Build CNN
+nn = Sequential([
+    Conv2D(32, (3,3), activation="relu", padding="valid", input_shape=(28,28,1)),
+    MaxPooling2D(pool_size=(2,2), strides=(2,2)),
+    Conv2D(64, (3,3), activation="relu", padding="valid"),
+    MaxPooling2D(pool_size=(2,2), strides=(2,2)),
+    Flatten(),
+    Dense(128, activation="relu", kernel_regularizer=tf.keras.regularizers.l2(0.01)),
+    BatchNormalization(),
+    Dropout(0.3),
+    Dense(64, activation="relu", kernel_regularizer=tf.keras.regularizers.l2(0.01)),
+    BatchNormalization(),
+    Dropout(0.3),
+    Dense(10, activation="softmax")  # 10 classes for MNIST
+])
+
+nn.compile(optimizer=Adam(learning_rate=0.001),
+           loss="sparse_categorical_crossentropy",
+           metrics=["accuracy"])
+
+# Train
+history = nn.fit(x_train, y_train,
+                 validation_data=(x_test, y_test),
+                 epochs=10,
+                 batch_size=128,
+                 callbacks=[EarlyStopping(monitor="val_loss", patience=3, restore_best_weights=True)],
+                 verbose=1)
+
+# Evaluate
+test_loss, test_acc = nn.evaluate(x_test, y_test, verbose=0)
+print(f"Test accuracy: {test_acc:.4f}")
+prob = nn.predict(x_test)
+pred = np.argmax(prob,axis =1)
+i = 0  # index of the image
+plt.imshow(x_test[i].reshape(28,28), cmap="gray")
+plt.show()
+
+pred = nn.predict(x_test[i].reshape(1,28,28,1))
+print("Predicted digit:", np.argmax(pred))
